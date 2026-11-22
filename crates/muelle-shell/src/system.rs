@@ -9,7 +9,9 @@ use windows::{
         },
         System::Com::CoTaskMemFree,
         System::Registry::{
-            HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD, RRF_RT_REG_SZ, RegGetValueW,
+            HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_SET_VALUE, REG_DWORD,
+            REG_OPTION_NON_VOLATILE, RRF_RT_REG_DWORD, RRF_RT_REG_SZ, RegCloseKey, RegCreateKeyExW,
+            RegGetValueW, RegSetValueExW,
         },
         UI::{
             HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI},
@@ -43,6 +45,34 @@ pub fn transparency_enabled() -> bool {
     }
     // Missing means never changed, and the default is on.
     !energy_saver_on() && personalize(w!("EnableTransparency")) != Some(0)
+}
+
+/// Suppresses or restores native Windows toast notification banners.
+///
+/// Setting `ToastEnabled` to 0 prevents Windows from showing its native toast
+/// popups so Muelle's macOS-style glass notification banners can take precedence.
+pub fn set_windows_toasts_enabled(enabled: bool) {
+    let value = u32::from(enabled).to_le_bytes();
+    // SAFETY: Updates the user's push notification toast setting safely.
+    unsafe {
+        let mut key = HKEY::default();
+        if RegCreateKeyExW(
+            HKEY_CURRENT_USER,
+            w!(r"Software\Microsoft\Windows\CurrentVersion\PushNotifications"),
+            None,
+            None,
+            REG_OPTION_NON_VOLATILE,
+            KEY_SET_VALUE,
+            None,
+            &mut key,
+            None,
+        )
+        .is_ok()
+        {
+            let _ = RegSetValueExW(key, w!("ToastEnabled"), None, REG_DWORD, Some(&value));
+            let _ = RegCloseKey(key);
+        }
+    }
 }
 
 /// `true` while energy saver (battery saver on Windows 10) is on.

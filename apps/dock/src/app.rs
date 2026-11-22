@@ -3977,11 +3977,19 @@ impl App {
                 self.sync_attention_visuals()?;
                 self.render()?;
             }
-            if self.config.notification_badges && !self.config.muted_apps.contains(&app_id) {
+            if (self.config.notification_badges || self.config.notifications)
+                && !self.config.muted_apps.contains(&app_id)
+            {
                 let title = tracker::title(hwnd);
-                self.notifications.push(
+                let app_name = muelle_shell::names::display_name(&app_id);
+                let app_name = if app_name.is_empty() {
+                    title.clone()
+                } else {
+                    app_name
+                };
+                let pushed = self.notifications.push(
                     app_id.clone(),
-                    title.clone(),
+                    app_name,
                     title,
                     String::new(),
                     None,
@@ -3990,10 +3998,50 @@ impl App {
                     self.config.notification_dnd || !self.config.notifications,
                     false,
                 );
-                let _ = self.render();
+                if self.config.notification_badges {
+                    let _ = self.render();
+                }
+                if pushed.is_some() {
+                    self.show_active_banners();
+                }
             }
         }
         Ok(())
+    }
+
+    fn show_active_banners(&self) {
+        if self.fullscreen || self.config.notification_dnd || !self.config.notifications {
+            return;
+        }
+        let pos = match self.config.notification_position {
+            muelle_config::NotificationPosition::TopRight => {
+                muelle_core::notifications::BannerPosition::TopRight
+            }
+            muelle_config::NotificationPosition::BottomRight => {
+                muelle_core::notifications::BannerPosition::BottomRight
+            }
+        };
+        let work_area = primary_monitor().map_or(
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 1920.0,
+                height: 1080.0,
+            },
+            |m| Rect {
+                x: m.screen.left as f32,
+                y: m.screen.top as f32,
+                width: (m.screen.right - m.screen.left) as f32,
+                height: (m.screen.bottom - m.screen.top) as f32,
+            },
+        );
+        let scale = self.dock_monitor().map_or(1.0, |m| m.scale);
+        let theme = Theme::for_system(uses_light_theme(), transparency_enabled());
+        let _ = notification_banner::NotificationBannerView::ensure_or_create(
+            &self.gfx, pos, work_area, scale, theme,
+        );
+        let _ =
+            notification_banner::NotificationBannerView::sync_queue(&self.gfx, &self.notifications);
     }
 
     pub fn on_notification(&mut self, payload: muelle_shell::dock_link::NotificationPayload) {
@@ -4031,38 +4079,8 @@ impl App {
             let _ = self.render();
         }
 
-        if pushed.is_some() && !self.fullscreen {
-            let pos = match self.config.notification_position {
-                muelle_config::NotificationPosition::TopRight => {
-                    muelle_core::notifications::BannerPosition::TopRight
-                }
-                muelle_config::NotificationPosition::BottomRight => {
-                    muelle_core::notifications::BannerPosition::BottomRight
-                }
-            };
-            let work_area = primary_monitor().map_or(
-                Rect {
-                    x: 0.0,
-                    y: 0.0,
-                    width: 1920.0,
-                    height: 1080.0,
-                },
-                |m| Rect {
-                    x: m.screen.left as f32,
-                    y: m.screen.top as f32,
-                    width: (m.screen.right - m.screen.left) as f32,
-                    height: (m.screen.bottom - m.screen.top) as f32,
-                },
-            );
-            let scale = self.dock_monitor().map_or(1.0, |m| m.scale);
-            let theme = Theme::for_system(uses_light_theme(), transparency_enabled());
-            let _ = notification_banner::NotificationBannerView::ensure_or_create(
-                &self.gfx, pos, work_area, scale, theme,
-            );
-            let _ = notification_banner::NotificationBannerView::sync_queue(
-                &self.gfx,
-                &self.notifications,
-            );
+        if pushed.is_some() {
+            self.show_active_banners();
         }
     }
 
@@ -5491,6 +5509,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARAM) ->
         }
         WM_DESTROY => {
             notification_banner::NotificationBannerView::hide();
+            muelle_shell::system::set_windows_toasts_enabled(true);
             unsafe { PostQuitMessage(0) };
         }
         _ if SHELL_HOOK.get() == Some(&msg) => match w.0 {
@@ -5790,6 +5809,9 @@ pub fn run() -> Result<()> {
         DROP_WINDOW.store(input.0 as isize, Ordering::Relaxed);
 
         app.schedule_update();
+        if app.config.notifications {
+            muelle_shell::system::set_windows_toasts_enabled(false);
+        }
         APP.set(Some(app));
     }
 
@@ -5818,6 +5840,7 @@ pub fn run() -> Result<()> {
             app.taskbar_worker.take()
         })
     });
+    muelle_shell::system::set_windows_toasts_enabled(true);
     APP.set(None);
     // SAFETY: Balances `OleInitialize` above, on the same thread.
     unsafe { OleUninitialize() };
