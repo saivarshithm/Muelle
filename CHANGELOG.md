@@ -10,6 +10,11 @@ copia la sección de la versión que se publica a la release de GitHub.
 
 ### English
 
+- Apps requesting attention in the background (e.g. WhatsApp, Slack, Telegram)
+  now display macOS-style glass notification banners with click-to-activate and
+  dock bounce.
+- Suppressed redundant native Windows rectangular toast popups while Muelle is
+  running, cleanly restoring the user's toast settings on exit.
 - Dock unread counts now take precedence over generic attention dots, avoiding
   overlapping badges. Counts update and clear without rebuilding the dock.
 - Fixed the music popup's mute hit target and removed the stray volume-slider
@@ -21,6 +26,11 @@ copia la sección de la versión que se publica a la release de GitHub.
 
 ### Español
 
+- Las aplicaciones que solicitan atención en segundo plano (p. ej. WhatsApp,
+  Slack, Telegram) ahora muestran avisos de notificación estilo macOS con clic
+  para activar y salto en el dock.
+- Se suprimen los avisos emergentes rectangulares nativos de Windows mientras
+  Muelle está en ejecución, restaurando limpiamente la configuración al salir.
 - El contador del Dock tiene prioridad sobre el punto de atención, evitando
   insignias superpuestas. Se actualiza y se borra sin reconstruir el dock.
 - Corregida la zona de clic de silencio en música y retirado el punto suelto
